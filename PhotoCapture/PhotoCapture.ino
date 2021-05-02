@@ -44,6 +44,7 @@ void loop() {
   }
 
   if(button.isReleased()){
+    // this needs to be here or the button down code loops twice - I don't know why yet
     Serial.println("The button is released");
   }
     
