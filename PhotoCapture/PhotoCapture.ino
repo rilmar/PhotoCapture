@@ -1,46 +1,64 @@
 #include <ezButton.h>
-#include <Stepper.h>
+#include <AccelStepper.h>
 
-ezButton button(7);
-const int LED_PIN = 6;
+#define HALF4WIRE 8
 
-const int STEPS_PER_REVOLUTION = 32;
-const int GEAR_REDUCTION = 64;
-const int TURN_FACTOR = 6; // a divider 2 = 1/2 turn per photo 
 
-/**
- * The gear ratio is 1 to 10, so approximately 36 degrees per turn (small motor is prone to a bit of error)
+#define ledPin 6
+#define cameraPin 13
+
+#define REV 4096
+
+/** 
+ *  I'm using a 28BYJ-48 stepper motor with a ULN2003 driver
+ *  I tested a nema 17 motor and found it to be overkill, microstepping was needed to avoid vibration
+ *  and the power requirements were heavier. The smaller 5v motor does the job fine and is simpler to deploy.
  */
 
+#define motorPin1  8         // IN1 on the ULN2003 driver 1
+#define motorPin2  9         // IN2 on the ULN2003 driver 1
+#define motorPin3  10        // IN3 on the ULN2003 driver 1
+#define motorPin4  11        // IN4 on the ULN2003 driver 1
 
+AccelStepper stepper_Motor(HALF4WIRE, motorPin1, motorPin3, motorPin2, motorPin4); 
+const int MAXSPEED =  2000;
+const int ACCELERATION = 100;
+const int STEPS = 200; //(STEPS_PER_REVOLUTION * GEAR_REDUCTION)/ TURN_FACTOR;
 
-const int SPEED = 60;
+ezButton button(7);
+const int numRotation = 8;
 
-const int STEPS = (STEPS_PER_REVOLUTION * GEAR_REDUCTION)/ TURN_FACTOR;
-
-int StepsRequired;
-int degrees = 0;
-
-Stepper stepperMotor(STEPS, 8, 10, 9, 11);
 
 void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(9600);
-  // button.setDebounceTime(50); // 100 millisecond debounce time
-  pinMode(LED_PIN, OUTPUT);
+  stepper_Motor.setMaxSpeed(MAXSPEED);
+  stepper_Motor.setAcceleration(ACCELERATION);
+  stepper_Motor.setSpeed(1000);
+  
+  pinMode(ledPin, OUTPUT);
+  pinMode(cameraPin, OUTPUT);
+  digitalWrite(cameraPin, LOW); 
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  button.loop(); // have to call this first
+  
+  button.loop(); // have to call this first - per ezButton
+  
   if(button.isPressed()){
-    digitalWrite(LED_PIN, HIGH); 
-    stepperMotor.setSpeed(SPEED);
-    stepperMotor.step(STEPS); // 1 rev = 10 degress about
-    Serial.println("complete, trigger camera");
-    digitalWrite(LED_PIN, LOW); 
-    degrees +=10;
-    Serial.println(degrees);
+    digitalWrite(ledPin, HIGH); 
+
+    for (int i = 0; i < 80; i++){
+      stepper_Motor.setCurrentPosition(0);
+      stepper_Motor.moveTo(REV / numRotation);
+      // Run to target position with set speed and acceleration/deceleration:
+      stepper_Motor.runToPosition();
+      delay(200); // can lengthen this if wobble from motor
+      // trigger the camera
+      digitalWrite(cameraPin, HIGH);
+      delay(200);
+      digitalWrite(cameraPin, LOW);
+      delay(4000); // allows for up to 4 second shutter speed
+    }
+    digitalWrite(ledPin, LOW); 
   }
 
   if(button.isReleased()){
